@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZEN Driver — Cloud Transfer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 font-sans">
+
+    <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-3 bg-indigo-600/20 text-indigo-400 rounded-xl">
+                    <i class="fa-solid me-0 fa-cloud-arrow-up text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide text-white">ZEN Driver</h1>
+                    <p class="text-xs text-slate-400">Direct Link to Google Drive Cloud Transfer</p>
+                </div>
+            </div>
+            <span id="authStatus" class="text-xs px-2.5 py-1 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">Bağlı Değil</span>
+        </div>
+
+        <div id="authSection" class="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center">
+            <span class="text-sm text-slate-300">Google Drive Hesabınızı Bağlayın</span>
+            <button onclick="handleAuth()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">
+                <i class="fa-brands fa-google mr-2"></i> Giriş Yap
+            </button>
+        </div>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Geçici Bağlantı Adresi (URL)</label>
+                <input type="text" id="targetUrl" placeholder="https://video-downloads.googleusercontent.com/..." 
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+            </div>
+            
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1.5">Dosya Adı</label>
+                <input type="text" id="fileName" value="ZEN_Video_Download.mp4" 
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+            </div>
+
+            <button onclick="startTransfer()" id="btnStart" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl transition flex items-center justify-center space-x-2 shadow-lg shadow-emerald-900/20">
+                <i class="fa-solid fa-bolt"></i>
+                <span>Drive'a Aktarmayı Başlat</span>
+            </button>
+        </div>
+
+        <div id="progressCard" class="hidden bg-slate-950 border border-slate-800 p-5 rounded-xl space-y-3">
+            <div class="flex justify-between items-center text-xs">
+                <span id="statusLabel" class="text-indigo-400 font-semibold uppercase tracking-wider">Aktarım Başlatılıyor...</span>
+                <span id="speedLabel" class="text-slate-400 font-mono">0.0 MB/s</span>
+            </div>
+
+            <div class="w-full bg-slate-800 h-3 rounded-full overflow-hidden">
+                <div id="progressBar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
+            </div>
+
+            <div class="flex justify-between items-center text-xs text-slate-400 font-mono">
+                <span id="percentLabel">%0</span>
+                <span id="sizeLabel">0 / 0 MB</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let googleAccessToken = null;
+        const BACKEND_URL = "https://ZEN-DRIVER-YOUR-RENDER-URL.onrender.com"; // Render URL'iniz
+
+        function handleAuth() {
+            // Google OAuth Popup açarak yetki alma token simülasyonu/entegrasyonu
+            alert("Google OAuth Client ID tanımlandıktan sonra hesabınızla doğrudan eşleşir.");
+        }
+
+        async function startTransfer() {
+            const downloadUrl = document.getElementById('targetUrl').value;
+            const fileName = document.getElementById('fileName').value;
+
+            if(!downloadUrl) return alert("Lütfen URL yapıştırın!");
+
+            document.getElementById('progressCard').classList.remove('hidden');
+            
+            // Backend'e istek gönderme
+            const res = await fetch(`${BACKEND_URL}/api/start-transfer`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    download_url: downloadUrl,
+                    file_name: fileName,
+                    access_token: googleAccessToken || "DEMO_TOKEN"
+                })
+            });
+
+            const data = await res.json();
+            trackProgress(data.task_id);
+        }
+
+        function trackProgress(taskId) {
+            const interval = setInterval(async () => {
+                const res = await fetch(`${BACKEND_URL}/api/status/${taskId}`);
+                const data = await res.json();
+
+                if (data.status === "downloading") {
+                    document.getElementById('statusLabel').innerText = "Drive'a Aktarılıyor...";
+                    document.getElementById('progressBar').style.width = `${data.progress}%`;
+                    document.getElementById('percentLabel').innerText = `%${data.progress}`;
+                    document.getElementById('speedLabel').innerText = `${data.speed} MB/s`;
+                    document.getElementById('sizeLabel').innerText = `${data.uploaded_mb} MB / ${data.total_mb} MB`;
+                } else if (data.status === "completed") {
+                    clearInterval(interval);
+                    document.getElementById('statusLabel').innerText = "Tamamlandı!";
+                    document.getElementById('statusLabel').className = "text-emerald-400 font-semibold";
+                    document.getElementById('progressBar').style.width = `100%`;
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
